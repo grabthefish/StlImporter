@@ -1,2 +1,2 @@
 # STL importer
-STL importer for Godot
+STL import plugin for Godot
