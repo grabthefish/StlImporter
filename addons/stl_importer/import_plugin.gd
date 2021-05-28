@@ -36,6 +36,61 @@ func import(source_file, save_path, options, platform_variants, gen_files):
 	var surface_tool = SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
+	if is_ascii_stl(file):
+		process_ascii_stl(file, surface_tool)
+	else:
+		process_binary_stl(file, surface_tool)
+	
+	var final_mesh = surface_tool.commit()
+	return ResourceSaver.save("%s.%s" % [save_path, get_save_extension()], final_mesh)
+	
+func is_ascii_stl(file):
+	# binary STL has a 80 character header which cannot begin with "solid"
+	# ASCII STL begins with "solid"
+	# so if first 5 bytes say "solid" it's an ASCII file
+	
+	var beginning_bytes = file.get_buffer(5)
+	var is_ascii = beginning_bytes.get_string_from_ascii() == "solid"
+	
+	# set the cursor back in the beginning of the file so the processing doesn't begin in a weird position
+	file.seek(0)
+	return is_ascii
+	
+func process_binary_stl(file, surface_tool):
+	# first 80 bytes is an ASCII header, this is not important and can be skipped
+	file.seek(80)
+	
+	# next 4 bytes is the number of facets the file contains
+	var number_of_facets = file.get_32()
+	
+	for i in range(number_of_facets):
+		# first there will be 3 floats for the normals
+		var normal_x = file.get_float()
+		var normal_y = file.get_float()
+		var normal_z = file.get_float()
+		surface_tool.add_normal(Vector3(normal_x, normal_y, normal_z))
+		
+		# then there wil be 3 vertices
+		# STL lists its vertices in counterclockwise order
+		# while Godot uses clockwise order for front faces in primitive triangle mode
+		# so we will temporarily store them and when we leave a facet add the vertices to surface_tool
+		var vertices = []
+		for j in range(3):
+			var x = file.get_float()
+			var y = file.get_float()
+			var z = file.get_float()
+			vertices.insert(0, Vector3(x, y, z))
+		
+		for vec in vertices:
+			surface_tool.add_vertex(vec)
+		
+		# lastly there are 2 bytes that contain the attribute byte count
+		# this should be 0 but we will skipp the given amount to be sure we 
+		# process the rest of the file correctly
+		var attribute_byte_count = file.get_16()
+		file.seek(file.get_position() + attribute_byte_count)
+	
+func process_ascii_stl(file, surface_tool):
 	# STL lists its vertices in counterclockwise order
 	# while Godot uses clockwise order for front faces in primitive triangle mode
 	# so we will temporarily store them and when we leave a facet add the vertices to surface_tool
@@ -100,8 +155,5 @@ func import(source_file, save_path, options, platform_variants, gen_files):
 				# to add the vertices to the mesh
 				vertices.insert(0, Vector3(x, y, z))
 	
-	var final_mesh = surface_tool.commit()
-	
-	return ResourceSaver.save("%s.%s" % [save_path, get_save_extension()], final_mesh)
 
 enum PARSE_STATE {SOLID, FACET, OUTER_LOOP}
