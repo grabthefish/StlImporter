@@ -1,37 +1,42 @@
-tool
+@tool
 extends EditorImportPlugin
 
-func get_importer_name():
+func _get_priority():
+	return 1.0
+
+func _get_importer_name():
 	return "stl.importer"
-	
-func get_visible_name():
-	return "STL Importer"
-	
-func get_recognized_extensions():
-	return ["stl"]
-	
-func get_save_extension():
-	return "mesh"
-	
-func get_resource_type():
-	return "Mesh"
-	
-func get_preset_count():
+
+func _get_import_order():
 	return 0
 	
-func get_import_options(preset):
+func _get_visible_name():
+	return "STL Importer"
+	
+func _get_recognized_extensions():
+	return ["stl"]
+	
+func _get_save_extension():
+	return "mesh"
+	
+func _get_resource_type():
+	return "Mesh"
+	
+func _get_preset_count():
+	return 0
+	
+func _get_import_options(preset, number):
 	return []
 	
-func get_preset_name(preset):
+func _get_preset_name(preset):
 	return "Unknown"
 	
-func import(source_file, save_path, options, platform_variants, gen_files):
+func _import(source_file, save_path, options, platform_variants, gen_files):
 	# STL file format: https://web.archive.org/web/20210428125112/http://www.fabbers.com/tech/STL_Format
 	
-	var file = File.new()
-	var err = file.open(source_file, File.READ)
-	if err != OK:
-		return err
+	var file = FileAccess.open(source_file, FileAccess.READ)
+	if file.get_error() != OK:
+		return file.get_error()
 	
 	var surface_tool = SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -42,7 +47,7 @@ func import(source_file, save_path, options, platform_variants, gen_files):
 		process_binary_stl(file, surface_tool)
 	
 	var final_mesh = surface_tool.commit()
-	return ResourceSaver.save("%s.%s" % [save_path, get_save_extension()], final_mesh)
+	return ResourceSaver.save(final_mesh, save_path + "." + _get_save_extension())
 	
 func is_ascii_stl(file):
 	# binary STL has a 80 character header which cannot begin with "solid"
@@ -68,7 +73,7 @@ func process_binary_stl(file, surface_tool):
 		var normal_x = file.get_float()
 		var normal_y = file.get_float()
 		var normal_z = file.get_float()
-		surface_tool.add_normal(Vector3(normal_x, normal_y, normal_z))
+		surface_tool.set_normal(Vector3(normal_x, normal_y, normal_z))
 		
 		# then there wil be 3 vertices
 		# STL lists its vertices in counterclockwise order
@@ -118,7 +123,7 @@ func process_ascii_stl(file, surface_tool):
 				var normal_x = float(parts[2])
 				var normal_y = float(parts[3])
 				var normal_z = float(parts[4])
-				surface_tool.add_normal(Vector3(normal_x, normal_y, normal_z))
+				surface_tool.set_normal(Vector3(normal_x, normal_y, normal_z))
 				
 				parsing_state = PARSE_STATE.FACET
 				
